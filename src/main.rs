@@ -40,6 +40,7 @@ impl Default for RuntimeState {
 struct Session {
     dek: Zeroizing<Vec<u8>>,
     last_activity: Instant,
+    passwordless: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -166,10 +167,15 @@ fn password_failure(message: &str) -> String {
     }
 }
 
-fn set_session(state: &RuntimeState, dek: Zeroizing<Vec<u8>>) -> Result<(), String> {
+fn set_session(
+    state: &RuntimeState,
+    dek: Zeroizing<Vec<u8>>,
+    passwordless: bool,
+) -> Result<(), String> {
     *state.session.lock().map_err(|_| "会话锁异常")? = Some(Session {
         dek,
         last_activity: Instant::now(),
+        passwordless,
     });
     *state.authorized_until.lock().map_err(|_| "授权锁异常")? = None;
     Ok(())
@@ -181,12 +187,30 @@ fn clear_session(state: &RuntimeState) -> Result<(), String> {
     Ok(())
 }
 
+fn passwordless_session(state: &RuntimeState) -> bool {
+    state
+        .session
+        .lock()
+        .map(|guard| guard.as_ref().is_some_and(|current| current.passwordless))
+        .unwrap_or(false)
+}
+
+// A passwordless vault must not be dropped from memory: the keychain reopens it without
+// any user input, so a locked state would only strand the window on a password prompt
+// for a password that does not exist. Losing focus is therefore not a lock event.
+fn release_session(state: &RuntimeState) -> Result<(), String> {
+    if passwordless_session(state) {
+        return Ok(());
+    }
+    clear_session(state)
+}
+
 fn session(state: &RuntimeState) -> Result<Zeroizing<Vec<u8>>, String> {
     let mut guard = state.session.lock().map_err(|_| "会话锁异常")?;
     let Some(current) = guard.as_mut() else {
         return Err("保险库已锁定".into());
     };
-    if current.last_activity.elapsed() >= SESSION_IDLE {
+    if !current.passwordless && current.last_activity.elapsed() >= SESSION_IDLE {
         *guard = None;
         *state.authorized_until.lock().map_err(|_| "授权锁异常")? = None;
         return Err("保险库因闲置已锁定".into());
@@ -207,10 +231,9 @@ fn session_peek(state: &RuntimeState) -> Result<Zeroizing<Vec<u8>>, String> {
 
 fn session_status(state: &RuntimeState) -> Result<bool, String> {
     let mut guard = state.session.lock().map_err(|_| "会话锁异常")?;
-    if guard
-        .as_ref()
-        .is_some_and(|current| current.last_activity.elapsed() >= SESSION_IDLE)
-    {
+    if guard.as_ref().is_some_and(|current| {
+        !current.passwordless && current.last_activity.elapsed() >= SESSION_IDLE
+    }) {
         *guard = None;
         *state.authorized_until.lock().map_err(|_| "授权锁异常")? = None;
     }
@@ -278,7 +301,7 @@ fn initialize(
         return Err(error);
     }
     let _ = security_state::clear();
-    set_session(&state, dek)
+    set_session(&state, dek, mode == UnlockMode::NoPassword)
 }
 
 #[tauri::command]
@@ -300,7 +323,7 @@ fn initialize_passwordless(state: State<'_, RuntimeState>) -> Result<(), String>
         return Err(error);
     }
     let _ = security_state::clear();
-    set_session(&state, dek)
+    set_session(&state, dek, true)
 }
 
 #[tauri::command]
@@ -322,7 +345,7 @@ fn unlock(password: String, state: State<'_, RuntimeState>) -> Result<(), String
         }
     }
     let _ = security_state::clear();
-    set_session(&state, dek)
+    set_session(&state, dek, data.unlock_mode == UnlockMode::NoPassword)
 }
 
 #[tauri::command]
@@ -369,13 +392,20 @@ fn try_system_unlock(state: State<'_, RuntimeState>) -> Result<bool, String> {
     }
     credential.last_used_at = current;
     save_credential(&credential)?;
-    set_session(&state, dek)?;
+    set_session(&state, dek, data.unlock_mode == UnlockMode::NoPassword)?;
     Ok(true)
+}
+
+fn lock_vault(state: &RuntimeState) -> Result<(), String> {
+    if passwordless_session(state) {
+        return Err("无主密码模式下保险库不会锁定".into());
+    }
+    clear_session(state)
 }
 
 #[tauri::command]
 fn lock(state: State<'_, RuntimeState>) -> Result<(), String> {
-    clear_session(&state)
+    lock_vault(&state)
 }
 
 #[tauri::command]
@@ -694,7 +724,7 @@ fn main() {
         .on_window_event(|window, event| {
             if matches!(event, WindowEvent::Focused(false) | WindowEvent::Destroyed) {
                 if let Some(state) = window.try_state::<RuntimeState>() {
-                    let _ = clear_session(&state);
+                    let _ = release_session(&state);
                 }
             }
         })
@@ -715,6 +745,47 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn passwordless_session_survives_focus_loss() {
+        let state = RuntimeState::default();
+        set_session(&state, Zeroizing::new(vec![7_u8; 32]), true).unwrap();
+        release_session(&state).unwrap();
+        assert!(passwordless_session(&state));
+        assert!(session_status(&state).unwrap());
+        assert_eq!(session(&state).unwrap().len(), 32);
+        assert!(lock_vault(&state).is_err());
+        assert!(session_status(&state).unwrap());
+    }
+
+    #[test]
+    fn password_session_locks_on_release() {
+        let state = RuntimeState::default();
+        set_session(&state, Zeroizing::new(vec![9_u8; 32]), false).unwrap();
+        release_session(&state).unwrap();
+        assert!(!session_status(&state).unwrap());
+        assert!(session(&state).is_err());
+    }
+
+    #[test]
+    fn idle_timeout_only_applies_to_password_protected_sessions() {
+        let passwordless = RuntimeState::default();
+        set_session(&passwordless, Zeroizing::new(vec![1_u8; 32]), true).unwrap();
+        expire(&passwordless);
+        assert!(session_status(&passwordless).unwrap());
+        assert!(session(&passwordless).is_ok());
+
+        let protected = RuntimeState::default();
+        set_session(&protected, Zeroizing::new(vec![2_u8; 32]), false).unwrap();
+        expire(&protected);
+        assert!(!session_status(&protected).unwrap());
+    }
+
+    fn expire(state: &RuntimeState) {
+        let mut guard = state.session.lock().unwrap();
+        guard.as_mut().unwrap().last_activity =
+            Instant::now() - SESSION_IDLE - Duration::from_secs(1);
+    }
 
     #[test]
     fn credential_expiry_depends_on_mode() {
