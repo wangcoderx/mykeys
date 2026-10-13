@@ -37,6 +37,8 @@ pub enum UnlockMode {
     Trust72Hours,
     #[serde(rename = "系统凭据")]
     SystemCredential,
+    #[serde(rename = "无需主密码")]
+    NoPassword,
 }
 
 impl UnlockMode {
@@ -45,6 +47,7 @@ impl UnlockMode {
             "每次启动" => Ok(Self::EveryLaunch),
             "72 小时" => Ok(Self::Trust72Hours),
             "系统凭据" => Ok(Self::SystemCredential),
+            "无需主密码" => Ok(Self::NoPassword),
             _ => Err("不支持的解锁模式".into()),
         }
     }
@@ -54,6 +57,7 @@ impl UnlockMode {
             Self::EveryLaunch => "每次启动",
             Self::Trust72Hours => "72 小时",
             Self::SystemCredential => "系统凭据",
+            Self::NoPassword => "无需主密码",
         }
     }
 }
@@ -216,7 +220,14 @@ pub fn validate_data(data: &VaultData) -> Result<(), String> {
     if data.records.len() > MAX_RECORDS {
         return Err("保险库记录数超过限制".into());
     }
+    if data.unlock_mode == UnlockMode::NoPassword && data.retrieve_auth {
+        return Err("无主密码的保险库不能启用取用验证".into());
+    }
     data.records.iter().try_for_each(validate_record)
+}
+
+pub fn random_password() -> String {
+    B64.encode(random::<32>())
 }
 
 fn kdf(password: &str, salt: &[u8], spec: &KdfSpec) -> Result<Zeroizing<Vec<u8>>, String> {
@@ -460,6 +471,7 @@ pub fn create_file(
     password: &str,
     data: &VaultData,
 ) -> Result<(VaultFile, Zeroizing<Vec<u8>>), String> {
+    validate_data(data)?;
     let salt = random::<16>();
     let wrap_nonce = random::<24>();
     let data_nonce = random::<24>();
@@ -479,6 +491,17 @@ pub fn create_file(
     file.wrapped_dek = B64.encode(encrypt(&kek, &wrap_nonce, &dek, &wrap_aad(&file)?)?);
     file.ciphertext = B64.encode(encrypt(&dek, &data_nonce, &plain, &data_aad(&file)?)?);
     Ok((file, dek))
+}
+
+pub fn create_file_passwordless(
+    data: &VaultData,
+) -> Result<(VaultFile, Zeroizing<Vec<u8>>), String> {
+    // A passwordless vault still wraps its DEK through the password path so the file
+    // keeps the same format and authenticated header. The wrapping password is random
+    // and never written anywhere: the DEK is recovered from the system keychain instead,
+    // which is why losing that keychain entry makes the file unreadable by design.
+    let password = Zeroizing::new(random_password());
+    create_file(&password, data)
 }
 
 pub fn rewrap(file: &mut VaultFile, dek: &[u8], password: &str) -> Result<(), String> {
@@ -601,6 +624,45 @@ mod tests {
         let recovered = unwrap_dek(&file, password).unwrap();
         assert_eq!(*recovered, *dek);
         assert_eq!(read_data(&file, &recovered).unwrap().records.len(), 0);
+    }
+
+    #[test]
+    fn passwordless_vault_round_trips_and_rejects_every_password() {
+        let data = VaultData {
+            records: vec![],
+            unlock_mode: UnlockMode::NoPassword,
+            retrieve_auth: false,
+        };
+        let (file, dek) = create_file_passwordless(&data).unwrap();
+        assert_eq!(file.version, FORMAT_VERSION);
+        assert_eq!(
+            file.kdf.as_ref().map(|spec| spec.algorithm.as_str()),
+            Some("argon2id-1.3")
+        );
+        assert!(unwrap_dek(&file, "correct horse battery staple").is_err());
+        assert!(unwrap_dek(&file, "").is_err());
+        let recovered = read_data(&file, &dek).unwrap();
+        assert_eq!(recovered.unlock_mode, UnlockMode::NoPassword);
+        assert!(!recovered.retrieve_auth);
+    }
+
+    #[test]
+    fn passwordless_vault_refuses_retrieval_auth() {
+        let data = VaultData {
+            records: vec![],
+            unlock_mode: UnlockMode::NoPassword,
+            retrieve_auth: true,
+        };
+        assert!(validate_data(&data).is_err());
+        assert!(create_file_passwordless(&data).is_err());
+    }
+
+    #[test]
+    fn unlock_mode_labels_round_trip() {
+        for label in ["每次启动", "72 小时", "系统凭据", "无需主密码"] {
+            assert_eq!(UnlockMode::parse(label).unwrap().label(), label);
+        }
+        assert!(UnlockMode::parse("无需密码").is_err());
     }
 
     #[cfg(unix)]

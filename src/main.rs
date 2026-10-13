@@ -49,6 +49,7 @@ struct AppStatus {
     unlocked: bool,
     unlock_mode: String,
     retrieve_auth: bool,
+    passwordless: bool,
 }
 
 #[derive(Deserialize)]
@@ -150,6 +151,21 @@ fn validate_input(input: &NewKey) -> Result<(), String> {
     Ok(())
 }
 
+fn reject_if_throttled() -> Result<(), String> {
+    let waiting = security_state::blocked_for();
+    if waiting > 0 {
+        return Err(format!("连续验证失败，请等待 {waiting} 秒后重试"));
+    }
+    Ok(())
+}
+
+fn password_failure(message: &str) -> String {
+    match security_state::register_failure() {
+        Ok(delay) if delay > 0 => format!("{message}，请等待 {delay} 秒后重试"),
+        _ => message.to_string(),
+    }
+}
+
 fn set_session(state: &RuntimeState, dek: Zeroizing<Vec<u8>>) -> Result<(), String> {
     *state.session.lock().map_err(|_| "会话锁异常")? = Some(Session {
         dek,
@@ -222,6 +238,7 @@ fn status(state: State<'_, RuntimeState>) -> Result<AppStatus, String> {
         unlocked,
         unlock_mode: mode.label().into(),
         retrieve_auth,
+        passwordless: mode == UnlockMode::NoPassword,
     })
 }
 
@@ -265,24 +282,37 @@ fn initialize(
 }
 
 #[tauri::command]
+fn initialize_passwordless(state: State<'_, RuntimeState>) -> Result<(), String> {
+    let _operation = state.vault_op.lock().map_err(|_| "保险库事务锁异常")?;
+    let _file_lock = vault::acquire_file_lock()?;
+    if vault::vault_path()?.exists() {
+        return Err("保险库已经存在".into());
+    }
+    let data = VaultData {
+        records: vec![],
+        unlock_mode: UnlockMode::NoPassword,
+        retrieve_auth: false,
+    };
+    let (file, dek) = vault::create_file_passwordless(&data)?;
+    save_credential(&make_credential(&file, &dek, UnlockMode::NoPassword)?)?;
+    if let Err(error) = vault::atomic_write(&file) {
+        let _ = remove_credential_verified();
+        return Err(error);
+    }
+    let _ = security_state::clear();
+    set_session(&state, dek)
+}
+
+#[tauri::command]
 fn unlock(password: String, state: State<'_, RuntimeState>) -> Result<(), String> {
     let password = Zeroizing::new(password);
     let _operation = state.vault_op.lock().map_err(|_| "保险库事务锁异常")?;
     let _file_lock = vault::acquire_file_lock()?;
-    let waiting = security_state::blocked_for();
-    if waiting > 0 {
-        return Err(format!("连续验证失败，请等待 {waiting} 秒后重试"));
-    }
+    reject_if_throttled()?;
     let mut file = vault::read_file()?;
     let dek = match vault::unwrap_dek(&file, &password) {
         Ok(dek) => dek,
-        Err(error) => {
-            let delay = security_state::register_failure()?;
-            if delay > 0 {
-                return Err(format!("{error}，请等待 {delay} 秒后重试"));
-            }
-            return Err(error);
-        }
+        Err(error) => return Err(password_failure(&error)),
     };
     let data = vault::read_data(&file, &dek)?;
     if file.version == vault::LEGACY_VERSION {
@@ -331,7 +361,7 @@ fn try_system_unlock(state: State<'_, RuntimeState>) -> Result<bool, String> {
     let matches = match data.unlock_mode {
         UnlockMode::EveryLaunch => false,
         UnlockMode::Trust72Hours => credential.expires_at.is_some(),
-        UnlockMode::SystemCredential => credential.expires_at.is_none(),
+        UnlockMode::SystemCredential | UnlockMode::NoPassword => credential.expires_at.is_none(),
     };
     if !matches {
         let _ = remove_credential_verified();
@@ -437,10 +467,16 @@ fn reveal_key(id: String, state: State<'_, RuntimeState>) -> Result<String, Stri
 fn authorize_retrieval(password: String, state: State<'_, RuntimeState>) -> Result<(), String> {
     let password = Zeroizing::new(password);
     let dek = session(&state)?;
+    reject_if_throttled()?;
     let file = vault::read_file()?;
-    if *vault::unwrap_dek(&file, &password)? != *dek {
-        return Err("主密码错误".into());
+    let candidate = match vault::unwrap_dek(&file, &password) {
+        Ok(candidate) => candidate,
+        Err(error) => return Err(password_failure(&error)),
+    };
+    if *candidate != *dek {
+        return Err(password_failure("主密码错误"));
     }
+    let _ = security_state::clear();
     *state.authorized_until.lock().map_err(|_| "授权锁异常")? =
         Some(Instant::now() + RETRIEVAL_AUTH);
     Ok(())
@@ -455,14 +491,25 @@ fn update_settings(
 ) -> Result<(), String> {
     let password = Zeroizing::new(password);
     let mode = UnlockMode::parse(&unlock_mode)?;
+    if mode == UnlockMode::NoPassword {
+        return Err("请使用关闭主密码操作".into());
+    }
+    reject_if_throttled()?;
     let _operation = state.vault_op.lock().map_err(|_| "保险库事务锁异常")?;
     let _file_lock = vault::acquire_file_lock()?;
     let dek = session(&state)?;
     let mut file = vault::read_file()?;
-    if *vault::unwrap_dek(&file, &password)? != *dek {
-        return Err("主密码错误".into());
+    let candidate = match vault::unwrap_dek(&file, &password) {
+        Ok(candidate) => candidate,
+        Err(error) => return Err(password_failure(&error)),
+    };
+    if *candidate != *dek {
+        return Err(password_failure("主密码错误"));
     }
     let mut data = vault::read_data(&file, &dek)?;
+    if data.unlock_mode == UnlockMode::NoPassword {
+        return Err("保险库当前无需主密码".into());
+    }
     if file.version == vault::LEGACY_VERSION {
         vault::migrate_v1(&mut file, &dek, &password, &data)?;
     }
@@ -482,6 +529,7 @@ fn update_settings(
         }
         return Err(error);
     }
+    let _ = security_state::clear();
     *state.authorized_until.lock().map_err(|_| "授权锁异常")? = None;
     Ok(())
 }
@@ -495,19 +543,113 @@ fn change_password(
     let old_password = Zeroizing::new(old_password);
     let new_password = Zeroizing::new(new_password);
     vault::validate_password(&new_password)?;
+    reject_if_throttled()?;
     let _operation = state.vault_op.lock().map_err(|_| "保险库事务锁异常")?;
     let _file_lock = vault::acquire_file_lock()?;
     let dek = session(&state)?;
     let mut file = vault::read_file()?;
-    if *vault::unwrap_dek(&file, &old_password)? != *dek {
-        return Err("当前主密码错误".into());
+    let candidate = match vault::unwrap_dek(&file, &old_password) {
+        Ok(candidate) => candidate,
+        Err(error) => return Err(password_failure(&error)),
+    };
+    if *candidate != *dek {
+        return Err(password_failure("当前主密码错误"));
     }
     let data = vault::read_data(&file, &dek)?;
+    if data.unlock_mode == UnlockMode::NoPassword {
+        return Err("保险库当前无需主密码".into());
+    }
     vault::rewrap(&mut file, &dek, &new_password)?;
     vault::persist(&mut file, &dek, &data)?;
     if data.unlock_mode != UnlockMode::EveryLaunch {
         save_credential(&make_credential(&file, &dek, data.unlock_mode)?)?;
+    } else {
+        remove_credential_verified()?;
     }
+    let _ = security_state::clear();
+    *state.authorized_until.lock().map_err(|_| "授权锁异常")? = None;
+    Ok(())
+}
+
+#[tauri::command]
+fn clear_master_password(password: String, state: State<'_, RuntimeState>) -> Result<(), String> {
+    let password = Zeroizing::new(password);
+    reject_if_throttled()?;
+    let _operation = state.vault_op.lock().map_err(|_| "保险库事务锁异常")?;
+    let _file_lock = vault::acquire_file_lock()?;
+    let dek = session(&state)?;
+    let mut file = vault::read_file()?;
+    let candidate = match vault::unwrap_dek(&file, &password) {
+        Ok(candidate) => candidate,
+        Err(error) => return Err(password_failure(&error)),
+    };
+    if *candidate != *dek {
+        return Err(password_failure("主密码错误"));
+    }
+    let mut data = vault::read_data(&file, &dek)?;
+    if data.unlock_mode == UnlockMode::NoPassword {
+        return Err("保险库已经不需要主密码".into());
+    }
+    // Re-wrapping under a random password that is never stored is what actually turns
+    // the master password off: the old password stops opening this file entirely.
+    let orphan = Zeroizing::new(vault::random_password());
+    vault::rewrap(&mut file, &dek, &orphan)?;
+    let previous = data.unlock_mode;
+    data.unlock_mode = UnlockMode::NoPassword;
+    data.retrieve_auth = false;
+    save_credential(&make_credential(&file, &dek, UnlockMode::NoPassword)?)?;
+    if let Err(error) = vault::persist(&mut file, &dek, &data) {
+        if previous == UnlockMode::EveryLaunch {
+            let _ = remove_credential_verified();
+        }
+        return Err(error);
+    }
+    let _ = security_state::clear();
+    *state.authorized_until.lock().map_err(|_| "授权锁异常")? = None;
+    Ok(())
+}
+
+#[tauri::command]
+fn set_master_password(
+    new_password: String,
+    unlock_mode: String,
+    retrieve_auth: bool,
+    state: State<'_, RuntimeState>,
+) -> Result<(), String> {
+    let new_password = Zeroizing::new(new_password);
+    vault::validate_password(&new_password)?;
+    let mode = UnlockMode::parse(&unlock_mode)?;
+    if mode == UnlockMode::NoPassword {
+        return Err("请使用关闭主密码操作".into());
+    }
+    let _operation = state.vault_op.lock().map_err(|_| "保险库事务锁异常")?;
+    let _file_lock = vault::acquire_file_lock()?;
+    let dek = session(&state)?;
+    let mut file = vault::read_file()?;
+    let mut data = vault::read_data(&file, &dek)?;
+    if data.unlock_mode != UnlockMode::NoPassword {
+        return Err("保险库已有主密码，请使用修改主密码".into());
+    }
+    vault::rewrap(&mut file, &dek, &new_password)?;
+    data.unlock_mode = mode;
+    data.retrieve_auth = retrieve_auth;
+    if mode != UnlockMode::EveryLaunch {
+        save_credential(&make_credential(&file, &dek, mode)?)?;
+    }
+    if let Err(error) = vault::persist(&mut file, &dek, &data) {
+        if mode != UnlockMode::EveryLaunch {
+            if let Ok(credential) = make_credential(&file, &dek, UnlockMode::NoPassword) {
+                let _ = save_credential(&credential);
+            }
+        } else {
+            let _ = remove_credential_verified();
+        }
+        return Err(error);
+    }
+    if mode == UnlockMode::EveryLaunch {
+        remove_credential_verified()?;
+    }
+    let _ = security_state::clear();
     *state.authorized_until.lock().map_err(|_| "授权锁异常")? = None;
     Ok(())
 }
@@ -535,6 +677,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             status,
             initialize,
+            initialize_passwordless,
             unlock,
             try_system_unlock,
             lock,
@@ -544,6 +687,8 @@ fn main() {
             authorize_retrieval,
             update_settings,
             change_password,
+            clear_master_password,
+            set_master_password,
             destroy_vault
         ])
         .on_window_event(|window, event| {
@@ -586,6 +731,9 @@ mod tests {
             Some(temporary.issued_at + TRUST_72_HOURS)
         );
         assert!(system.expires_at.is_none());
+        let passwordless = make_credential(&file, &dek, UnlockMode::NoPassword).unwrap();
+        assert!(passwordless.expires_at.is_none());
+        assert_eq!(passwordless.vault_id, system.vault_id);
     }
 
     #[test]

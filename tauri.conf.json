@@ -9,7 +9,7 @@
   "app": {
     "withGlobalTauri": true,
     "security": {
-      "csp": "default-src 'self' asset:; img-src 'self' asset: data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'sha256-iOcKvY29p5yoiH/M9hLK784PH8nykQodexLjItc1lYk='; object-src 'none'; base-uri 'none'; frame-src 'none'"
+      "csp": "default-src 'self' asset:; img-src 'self' asset: data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'sha256-wtBmVRslvAS5K0maI5pk1j/w2aL4qYJhQurXd7lH8yE='; object-src 'none'; base-uri 'none'; frame-src 'none'"
     },
     "windows": [
       {
