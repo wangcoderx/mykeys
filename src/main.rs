@@ -359,7 +359,7 @@ fn try_system_unlock(state: State<'_, RuntimeState>) -> Result<bool, String> {
         return Ok(false);
     };
     let raw = Zeroizing::new(raw);
-    let Ok(mut credential) = serde_json::from_str::<StoredCredential>(&raw) else {
+    let Ok(credential) = serde_json::from_str::<StoredCredential>(&raw) else {
         let _ = remove_credential_verified();
         return Ok(false);
     };
@@ -390,8 +390,11 @@ fn try_system_unlock(state: State<'_, RuntimeState>) -> Result<bool, String> {
         let _ = remove_credential_verified();
         return Ok(false);
     }
-    credential.last_used_at = current;
-    save_credential(&credential)?;
+    // Unlocking must not write to the keychain. Rewriting last_used_at here made every
+    // launch mutate the item, and macOS re-checks the item ACL for writes: a build whose
+    // signature differs from the one that created the item gets an authorization dialog
+    // on every launch. The field is still read for the clock-rollback check below, it is
+    // simply no longer refreshed.
     set_session(&state, dek, data.unlock_mode == UnlockMode::NoPassword)?;
     Ok(true)
 }
