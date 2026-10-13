@@ -1,0 +1,9 @@
+/target/
+/.DS_Store
+**/.DS_Store
+*.log
+*.tmp
+*.dmg
+*.app
+/.workbuddy/
+

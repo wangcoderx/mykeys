@@ -1,0 +1,465 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>冒泡排序 · 一步一步看懂</title>
+  <style>
+    :root {
+      --paper: #f7f5ef;
+      --paper-deep: #ece8dc;
+      --ink: #18332f;
+      --muted: #61716d;
+      --line: #cfd7d1;
+      --green: #147d64;
+      --green-dark: #0c5d4a;
+      --green-soft: #dceee6;
+      --compare: #e5a732;
+      --compare-soft: #fff0c9;
+      --swap: #c8523c;
+      --swap-soft: #f9ddd6;
+      --white: #fffefa;
+      --shadow: 0 18px 50px rgba(24, 51, 47, .09);
+      --ease: cubic-bezier(.16, 1, .3, 1);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--paper);
+      font-family: "Avenir Next", "Noto Sans SC", "PingFang SC", sans-serif;
+      min-height: 100vh;
+    }
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      opacity: .23;
+      background-image: radial-gradient(rgba(20, 70, 58, .16) .45px, transparent .45px);
+      background-size: 5px 5px;
+    }
+    button, input { font: inherit; }
+    button:focus-visible, input:focus-visible { outline: 3px solid rgba(20, 125, 100, .28); outline-offset: 2px; }
+    .topline { height: 6px; background: var(--green); }
+    header {
+      max-width: 1240px;
+      margin: 0 auto;
+      padding: 34px 32px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: end;
+      gap: 30px;
+    }
+    .eyebrow { color: var(--green); font-weight: 800; font-size: 13px; letter-spacing: .12em; margin-bottom: 7px; }
+    h1 { margin: 0; font-family: Georgia, "Songti SC", serif; font-weight: 700; font-size: clamp(34px, 4vw, 58px); line-height: 1.04; letter-spacing: -.035em; }
+    .subtitle { max-width: 480px; margin: 0 0 4px; color: var(--muted); line-height: 1.7; font-size: 15px; }
+    main { max-width: 1240px; margin: 0 auto; padding: 0 32px 42px; }
+    .setup {
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      align-items: end;
+      gap: 20px;
+      padding: 22px 24px;
+      background: var(--white);
+      border: 1px solid var(--line);
+      border-radius: 8px 8px 0 0;
+    }
+    label, legend { display: block; font-size: 13px; font-weight: 800; margin-bottom: 8px; }
+    .input-row { display: flex; gap: 10px; }
+    input[type="text"] { width: 100%; min-width: 0; border: 1px solid #9fada7; background: #fff; color: var(--ink); border-radius: 5px; padding: 12px 14px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 15px; }
+    .apply { border: 1px solid var(--green-dark); color: #fff; background: var(--green); border-radius: 5px; padding: 0 18px; min-width: 72px; white-space: nowrap; font-weight: 800; cursor: pointer; }
+    .apply:hover { background: var(--green-dark); }
+    .hint, .error { min-height: 18px; margin: 6px 0 0; font-size: 12px; }
+    .hint { color: var(--muted); }
+    .error { color: #9b2f20; font-weight: 700; }
+    fieldset { border: 0; padding: 0; margin: 0; }
+    .segment { display: inline-flex; border: 1px solid #9fada7; border-radius: 5px; overflow: hidden; }
+    .segment label { margin: 0; cursor: pointer; }
+    .segment input { position: absolute; opacity: 0; pointer-events: none; }
+    .segment span { display: block; padding: 11px 18px; background: #fff; color: var(--muted); font-size: 14px; }
+    .segment label + label span { border-left: 1px solid #9fada7; }
+    .segment input:checked + span { color: #fff; background: var(--green); font-weight: 800; }
+    .keyboard { color: var(--muted); font-size: 12px; padding-bottom: 11px; white-space: nowrap; }
+    kbd { border: 1px solid var(--line); background: var(--paper); border-bottom-width: 2px; border-radius: 3px; padding: 2px 6px; font-family: ui-monospace, monospace; color: var(--ink); }
+    .lesson {
+      display: grid;
+      grid-template-columns: minmax(0, 1.65fr) minmax(300px, .75fr);
+      border: 1px solid var(--line);
+      border-top: 0;
+      background: var(--white);
+      box-shadow: var(--shadow);
+    }
+    .stage-panel { min-width: 0; padding: 28px 32px 30px; border-right: 1px solid var(--line); }
+    .stage-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
+    .stage-head h2 { margin: 0; font-family: Georgia, "Songti SC", serif; font-size: 22px; }
+    .step-chip { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: var(--muted); }
+    .visual-stage {
+      position: relative;
+      height: 370px;
+      border-bottom: 2px solid #9cacA5;
+      background: linear-gradient(to top, rgba(20, 125, 100, .035), transparent 58%);
+      overflow: hidden;
+    }
+    .bars { position: absolute; inset: 20px 2px 0; }
+    .bar-item {
+      position: absolute;
+      bottom: 0;
+      width: var(--item-w);
+      left: var(--x);
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      align-items: center;
+      transition: left .62s var(--ease);
+    }
+    .bar {
+      width: min(54px, 68%);
+      height: var(--bar-h);
+      min-height: 26px;
+      background: #78ae9d;
+      border: 2px solid var(--green-dark);
+      border-radius: 4px 4px 0 0;
+      transition: height .3s var(--ease), background-color .25s, border-color .25s, transform .25s;
+    }
+    .value {
+      position: absolute;
+      bottom: 10px;
+      transform: translateY(50%);
+      min-width: 42px;
+      padding: 7px 6px;
+      border-radius: 4px;
+      background: var(--ink);
+      color: #fff;
+      border: 2px solid var(--ink);
+      text-align: center;
+      font: 800 13px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+      transition: background-color .25s, color .25s, border-color .25s;
+    }
+    .index { height: 28px; padding-top: 12px; color: var(--muted); font: 11px/1 ui-monospace, monospace; }
+    .bar-item.compare .bar { background: var(--compare); border-color: #9f6810; transform: translateY(-8px); }
+    .bar-item.compare .value { background: var(--compare-soft); border-color: var(--compare); color: #694207; }
+    .bar-item.swap .bar { background: var(--swap); border-color: #8c2d20; transform: translateY(-8px); }
+    .bar-item.swap .value { background: var(--swap-soft); border-color: var(--swap); color: #792719; }
+    .bar-item.sorted .bar { background: var(--green-soft); border-color: var(--green); }
+    .bar-item.sorted .value { background: var(--green); border-color: var(--green); }
+    .legend { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 18px; font-size: 12px; color: var(--muted); }
+    .legend span { display: inline-flex; align-items: center; gap: 7px; }
+    .dot { width: 11px; height: 11px; border: 2px solid; border-radius: 2px; }
+    .dot.compare { background: var(--compare); border-color: #9f6810; }
+    .dot.swap { background: var(--swap); border-color: #8c2d20; }
+    .dot.done { background: var(--green-soft); border-color: var(--green); }
+    .explain-panel { padding: 28px 26px; display: flex; flex-direction: column; min-width: 0; }
+    .phase { display: inline-block; align-self: flex-start; color: var(--green-dark); background: var(--green-soft); padding: 5px 9px; border-radius: 3px; font-size: 12px; font-weight: 800; letter-spacing: .04em; }
+    .explain-panel h2 { font-family: Georgia, "Songti SC", serif; font-size: 27px; line-height: 1.3; margin: 18px 0 10px; text-wrap: balance; }
+    .explanation { margin: 0; color: #40544f; line-height: 1.75; min-height: 82px; }
+    .fact { margin: 22px 0 0; padding: 16px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); font: 13px/1.65 ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .fact strong { color: var(--green-dark); }
+    .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 18px; }
+    .stat { padding: 10px 0; }
+    .stat b { display: block; font: 800 24px/1 ui-monospace, monospace; }
+    .stat small { color: var(--muted); }
+    .progress-wrap { margin-top: auto; padding-top: 22px; }
+    .progress-label { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-bottom: 7px; }
+    .progress { height: 7px; background: var(--paper-deep); overflow: hidden; border-radius: 8px; }
+    .progress > i { display: block; height: 100%; width: 0; background: var(--green); transition: width .35s var(--ease); }
+    .controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 18px 24px;
+      border: 1px solid var(--line);
+      border-top: 0;
+      background: #ece9df;
+      border-radius: 0 0 8px 8px;
+    }
+    .controls button { border: 1px solid #889992; color: var(--ink); background: var(--white); border-radius: 5px; padding: 11px 16px; font-weight: 800; cursor: pointer; }
+    .controls button:hover:not(:disabled) { border-color: var(--green); color: var(--green-dark); }
+    .controls .primary { background: var(--green); color: #fff; border-color: var(--green-dark); min-width: 104px; }
+    .controls .primary:hover:not(:disabled) { background: var(--green-dark); color: #fff; }
+    button:disabled, input:disabled { opacity: .44; cursor: not-allowed; }
+    .controls .spacer { flex: 1; }
+    .reset { background: transparent !important; border-color: transparent !important; }
+    .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); }
+    @media (max-width: 820px) {
+      header { align-items: start; flex-direction: column; padding: 26px 22px 18px; gap: 10px; }
+      main { padding: 0 22px 30px; }
+      .setup { grid-template-columns: 1fr 1fr; }
+      .input-field { grid-column: 1 / -1; }
+      .lesson { grid-template-columns: 1fr; }
+      .stage-panel { border-right: 0; border-bottom: 1px solid var(--line); padding: 24px; }
+      .visual-stage { height: 340px; }
+      .explain-panel { min-height: 330px; }
+      .keyboard { justify-self: end; }
+    }
+    @media (max-width: 520px) {
+      header { padding: 22px 16px 16px; }
+      .subtitle { font-size: 14px; }
+      main { padding: 0 12px 22px; }
+      .setup { grid-template-columns: 1fr; gap: 14px; padding: 18px 16px; }
+      .input-field { grid-column: auto; }
+      .keyboard { display: none; }
+      .input-row { gap: 7px; }
+      .apply { padding: 0 12px; }
+      .stage-panel { padding: 20px 14px; }
+      .visual-stage { height: 290px; }
+      .bar { width: 72%; }
+      .value { min-width: 30px; padding: 6px 3px; font-size: 11px; }
+      .index { font-size: 9px; }
+      .legend { gap: 10px; }
+      .explain-panel { padding: 22px 18px; min-height: 340px; }
+      .explain-panel h2 { font-size: 23px; }
+      .controls { display: grid; grid-template-columns: 1fr 1fr; padding: 14px; }
+      .controls button { padding: 11px 8px; }
+      .controls .spacer { display: none; }
+      .reset { grid-column: 1 / -1; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <!-- Assumptions: 以首次学习者为第一受众；不借用具体品牌资产，仅迁移教育产品的清晰层级、自然绿与渐进反馈。 -->
+  <div class="topline"></div>
+  <header>
+    <div>
+      <div class="eyebrow">算法实验室 · 01</div>
+      <h1>冒泡排序，<br>一步一步看懂</h1>
+    </div>
+    <p class="subtitle">相邻的两个数反复比较，把该轮最大（或最小）的数慢慢推到末尾。你来控制每一步的节奏。</p>
+  </header>
+  <main>
+    <section class="setup" aria-label="排序设置">
+      <div class="input-field">
+        <label for="sequence">输入一组数字</label>
+        <div class="input-row">
+          <input id="sequence" type="text" value="7, 3, 9, 2, 6, 4" aria-describedby="input-help input-error" autocomplete="off" />
+          <button class="apply" id="apply">应用</button>
+        </div>
+        <p class="hint" id="input-help">用空格或逗号分隔，支持负数与小数，共 2–12 个</p>
+        <p class="error" id="input-error" role="alert"></p>
+      </div>
+      <fieldset>
+        <legend>排序方向</legend>
+        <div class="segment">
+          <label><input type="radio" name="direction" value="asc" checked><span>升序</span></label>
+          <label><input type="radio" name="direction" value="desc"><span>降序</span></label>
+        </div>
+      </fieldset>
+      <div class="keyboard"><kbd>←</kbd> 上一步　<kbd>→</kbd> 下一步</div>
+    </section>
+
+    <section class="lesson">
+      <div class="stage-panel">
+        <div class="stage-head"><h2>数组如何移动</h2><span class="step-chip" id="step-chip">步骤 0 / 0</span></div>
+        <div class="visual-stage" aria-label="冒泡排序柱状图"><div class="bars" id="bars"></div></div>
+        <div class="legend" aria-label="图例">
+          <span><i class="dot compare"></i>正在比较</span><span><i class="dot swap"></i>发生交换</span><span><i class="dot done"></i>已经就位</span>
+        </div>
+      </div>
+      <aside class="explain-panel" aria-live="polite">
+        <span class="phase" id="phase">准备开始</span>
+        <h2 id="headline">先观察这组数字</h2>
+        <p class="explanation" id="explanation">点击「下一步」，从左侧第一对相邻数字开始比较。</p>
+        <div class="fact" id="fact">当前数组：<strong>[7, 3, 9, 2, 6, 4]</strong></div>
+        <div class="stats"><div class="stat"><b id="comparisons">0</b><small>比较次数</small></div><div class="stat"><b id="swaps">0</b><small>交换次数</small></div></div>
+        <div class="progress-wrap">
+          <div class="progress-label"><span>学习进度</span><span id="progress-text">0%</span></div>
+          <div class="progress" role="progressbar" aria-label="排序进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i id="progress-bar"></i></div>
+        </div>
+      </aside>
+    </section>
+    <nav class="controls" aria-label="步骤控制">
+      <button id="prev" disabled>上一步</button>
+      <button id="next" class="primary">下一步</button>
+      <button id="play">自动播放</button>
+      <span class="spacer"></span>
+      <button id="reset" class="reset">重新开始</button>
+    </nav>
+    <div class="sr-only" id="announcer" aria-live="assertive"></div>
+  </main>
+
+  <script>
+    (() => {
+      const $ = (s) => document.querySelector(s);
+      const els = {
+        input: $('#sequence'), apply: $('#apply'), error: $('#input-error'), bars: $('#bars'),
+        prev: $('#prev'), next: $('#next'), play: $('#play'), reset: $('#reset'),
+        phase: $('#phase'), headline: $('#headline'), explanation: $('#explanation'), fact: $('#fact'),
+        comparisons: $('#comparisons'), swaps: $('#swaps'), step: $('#step-chip'),
+        progress: $('#progress-bar'), progressText: $('#progress-text'), progressWrap: $('.progress'),
+        announcer: $('#announcer')
+      };
+      let direction = 'asc';
+      let steps = [];
+      let stepIndex = 0;
+      let timer = null;
+      let lastPositions = new Map();
+
+      const fmt = (n) => Number.isInteger(n) ? String(n) : String(Number(n.toFixed(6)));
+      const arrayText = (arr) => `[${arr.map(x => fmt(x.value)).join(', ')}]`;
+
+      function parseInput(text) {
+        const clean = text.trim();
+        if (!clean) throw new Error('请输入至少 2 个数字。');
+        const parts = clean.split(/[\s,，]+/).filter(Boolean);
+        if (parts.length < 2 || parts.length > 12) throw new Error('序列需要包含 2–12 个数字。');
+        const values = parts.map(Number);
+        if (values.some(n => !Number.isFinite(n))) throw new Error('序列中含有无法识别的数字，请检查后重试。');
+        return values;
+      }
+
+      function makeSteps(values, dir) {
+        const arr = values.map((value, id) => ({ value, id }));
+        const result = [];
+        let comparisons = 0, swaps = 0;
+        const push = (type, data = {}) => result.push({
+          type, arr: arr.map(x => ({...x})), comparisons, swaps,
+          compareIds: [], swapIds: [], sortedIds: [], pass: 0, ...data
+        });
+        push('start', { headline: '先观察这组数字', explanation: '点击「下一步」，从左侧第一对相邻数字开始比较。' });
+        for (let pass = 0; pass < arr.length - 1; pass++) {
+          let changed = false;
+          for (let j = 0; j < arr.length - 1 - pass; j++) {
+            comparisons++;
+            const a = arr[j], b = arr[j + 1];
+            const shouldSwap = dir === 'asc' ? a.value > b.value : a.value < b.value;
+            push('compare', {
+              pass: pass + 1, indices: [j, j + 1], values: [a.value, b.value], compareIds: [a.id, b.id],
+              sortedIds: arr.slice(arr.length - pass).map(x => x.id), shouldSwap,
+              headline: `比较 ${fmt(a.value)} 和 ${fmt(b.value)}`,
+              explanation: shouldSwap
+                ? `${fmt(a.value)} 应该排在 ${fmt(b.value)} 的后面，所以下一步把它们交换。`
+                : `这两个数字已经符合${dir === 'asc' ? '从小到大' : '从大到小'}的顺序，不需要交换。`
+            });
+            if (shouldSwap) {
+              const ids = [a.id, b.id];
+              [arr[j], arr[j + 1]] = [arr[j + 1], arr[j]];
+              swaps++; changed = true;
+              push('swap', {
+                pass: pass + 1, indices: [j, j + 1], values: [a.value, b.value], swapIds: ids,
+                sortedIds: arr.slice(arr.length - pass).map(x => x.id),
+                headline: `${fmt(a.value)} 与 ${fmt(b.value)} 交换位置`,
+                explanation: '交换完成。现在继续向右比较，让目标数字逐步“冒”到这一轮的末尾。'
+              });
+            }
+          }
+          const completed = arr.slice(arr.length - pass - 1).map(x => x.id);
+          push('pass', {
+            pass: pass + 1, sortedIds: completed,
+            headline: `第 ${pass + 1} 轮完成`,
+            explanation: `末尾的 ${fmt(arr[arr.length - pass - 1].value)} 已经就位，下一轮不用再比较它。`
+          });
+          if (!changed) break;
+        }
+        push('done', {
+          pass: Math.max(1, result.at(-1).pass), sortedIds: arr.map(x => x.id),
+          headline: '排序完成', explanation: `所有数字都已按${dir === 'asc' ? '升序' : '降序'}排列。你可以用「上一步」回看任意过程。`
+        });
+        return result;
+      }
+
+      function setPlaying(on) {
+        if (!on && timer) { clearTimeout(timer); timer = null; }
+        els.play.textContent = on ? '暂停' : '自动播放';
+        els.input.disabled = on;
+        els.apply.disabled = on;
+        document.querySelectorAll('input[name="direction"]').forEach(r => r.disabled = on);
+      }
+
+      function schedule() {
+        if (!timer) return;
+        if (stepIndex >= steps.length - 1) { setPlaying(false); return; }
+        const delay = steps[stepIndex].type === 'compare' ? 900 : 720;
+        clearTimeout(timer);
+        timer = setTimeout(() => {
+          if (!timer) return;
+          stepIndex++;
+          render();
+          timer = setTimeout(() => schedule(), 0);
+        }, delay);
+      }
+
+      function render() {
+        const s = steps[stepIndex];
+        const values = steps[0].arr.map(x => x.value);
+        const min = Math.min(...values), max = Math.max(...values);
+        const range = max - min || 1;
+        const n = s.arr.length;
+        const current = new Map(s.arr.map((x, i) => [x.id, i]));
+        const previous = lastPositions;
+        els.bars.innerHTML = s.arr.map(item => {
+          const i = current.get(item.id);
+          const height = 20 + ((item.value - min) / range) * 68;
+          const cls = s.swapIds.includes(item.id) ? 'swap' : s.compareIds.includes(item.id) ? 'compare' : s.sortedIds.includes(item.id) ? 'sorted' : '';
+          return `<div class="bar-item ${cls}" data-id="${item.id}" style="--item-w:${100/n}%;--x:${i*100/n}%;--bar-h:${height}%"><div class="bar"></div><span class="value">${fmt(item.value)}</span><span class="index">[${i}]</span></div>`;
+        }).join('');
+        if (!matchMedia('(prefers-reduced-motion: reduce)').matches && previous.size) {
+          els.bars.querySelectorAll('.bar-item').forEach(node => {
+            const id = Number(node.dataset.id), old = previous.get(id), now = current.get(id);
+            if (old !== undefined && old !== now) {
+              node.animate([{ transform: `translateX(${(old-now)*100}%)` }, { transform: 'translateX(0)' }], { duration: 640, easing: 'cubic-bezier(.16,1,.3,1)' });
+            }
+          });
+        }
+        lastPositions = current;
+        const pct = Math.round(stepIndex / (steps.length - 1) * 100);
+        els.phase.textContent = s.type === 'done' ? '全部完成' : s.type === 'start' ? '准备开始' : `第 ${s.pass} 轮 · ${labelFor(s.type)}`;
+        els.headline.textContent = s.headline;
+        els.explanation.textContent = s.explanation;
+        els.fact.innerHTML = s.indices
+          ? `索引 <strong>[${s.indices[0]}]</strong> 与 <strong>[${s.indices[1]}]</strong>　·　当前数组：<strong>${arrayText(s.arr)}</strong>`
+          : `当前数组：<strong>${arrayText(s.arr)}</strong>`;
+        els.comparisons.textContent = s.comparisons;
+        els.swaps.textContent = s.swaps;
+        els.step.textContent = `步骤 ${stepIndex} / ${steps.length - 1}`;
+        els.progress.style.width = pct + '%';
+        els.progressText.textContent = pct + '%';
+        els.progressWrap.setAttribute('aria-valuenow', pct);
+        els.prev.disabled = stepIndex === 0;
+        els.next.disabled = stepIndex === steps.length - 1;
+        els.announcer.textContent = s.headline + '。' + s.explanation;
+      }
+
+      function labelFor(type) { return ({ compare: '比较', swap: '交换', pass: '本轮完成' })[type] || ''; }
+
+      function rebuild(values) {
+        setPlaying(false);
+        steps = makeSteps(values, direction);
+        stepIndex = 0;
+        lastPositions = new Map();
+        els.error.textContent = '';
+        render();
+      }
+
+      function applyInput() {
+        try { rebuild(parseInput(els.input.value)); }
+        catch (err) { setPlaying(false); els.error.textContent = err.message; els.input.focus(); }
+      }
+      els.apply.addEventListener('click', applyInput);
+      els.input.addEventListener('keydown', e => { if (e.key === 'Enter') applyInput(); });
+      document.querySelectorAll('input[name="direction"]').forEach(radio => radio.addEventListener('change', e => {
+        direction = e.target.value;
+        try { rebuild(parseInput(els.input.value)); } catch (err) { els.error.textContent = err.message; }
+      }));
+      els.prev.addEventListener('click', () => { setPlaying(false); if (stepIndex > 0) { stepIndex--; render(); } });
+      els.next.addEventListener('click', () => { setPlaying(false); if (stepIndex < steps.length - 1) { stepIndex++; render(); } });
+      els.play.addEventListener('click', () => {
+        if (timer) { setPlaying(false); return; }
+        if (stepIndex >= steps.length - 1) stepIndex = 0;
+        timer = -1; setPlaying(true); render(); schedule();
+      });
+      els.reset.addEventListener('click', () => { setPlaying(false); stepIndex = 0; render(); });
+      window.addEventListener('keydown', e => {
+        if (e.target.matches('input')) return;
+        if (e.key === 'ArrowLeft' && stepIndex > 0) { e.preventDefault(); setPlaying(false); stepIndex--; render(); }
+        if (e.key === 'ArrowRight' && stepIndex < steps.length - 1) { e.preventDefault(); setPlaying(false); stepIndex++; render(); }
+      });
+      window.addEventListener('resize', render);
+      rebuild(parseInput(els.input.value));
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,25 @@
+name: Security checks
+
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: "23 3 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  rust:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy,rustfmt
+      - run: cargo fmt --check
+      - run: cargo test --locked
+      - run: cargo clippy --locked --all-targets --all-features -- -D warnings
+      - run: cargo install cargo-audit --locked
+      - run: cargo audit
+

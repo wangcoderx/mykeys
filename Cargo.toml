@@ -1,0 +1,31 @@
+[package]
+name = "mykeys"
+version = "0.3.0"
+description = "A local-first API key vault"
+authors = ["MyKeys"]
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+base64 = "0.22"
+sha2 = "0.10"
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+argon2 = "0.5"
+chacha20poly1305 = { version = "0.10", features = ["std"] }
+rand = "0.8"
+base64 = "0.22"
+zeroize = { version = "1", features = ["derive"] }
+keyring = { version = "3", features = ["apple-native"] }
+dirs = "6"
+fs2 = "0.4"
+
+[profile.release]
+panic = "abort"
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true

@@ -1,0 +1,48 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "MyKeys",
+  "version": "0.3.0",
+  "identifier": "com.mykeys.vault",
+  "build": {
+    "frontendDist": "MyKeys-2.0"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "security": {
+      "csp": "default-src 'self' asset:; img-src 'self' asset: data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'sha256-iOcKvY29p5yoiH/M9hLK784PH8nykQodexLjItc1lYk='; object-src 'none'; base-uri 'none'; frame-src 'none'"
+    },
+    "windows": [
+      {
+        "title": "MyKeys",
+        "width": 1040,
+        "height": 720,
+        "minWidth": 680,
+        "minHeight": 560,
+        "resizable": true,
+        "fullscreen": false,
+        "center": true,
+        "decorations": true,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
+        "transparent": false
+      }
+    ]
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["app", "dmg"],
+    "category": "Utility",
+    "shortDescription": "Local-first API key vault",
+    "longDescription": "MyKeys stores API keys in an encrypted local vault.",
+    "macOS": {
+      "minimumSystemVersion": "11.0"
+    },
+    "icon": [
+      "设计方案/icons/32x32.png",
+      "设计方案/icons/128x128.png",
+      "设计方案/icons/128x128@2x.png",
+      "设计方案/icons/icon-macos.icns",
+      "设计方案/icons/icon.ico"
+    ]
+  }
+}

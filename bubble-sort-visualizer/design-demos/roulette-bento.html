@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bubble Lab · 冒泡排序逐步演示</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #080a0a;
+      --panel: rgba(22, 25, 24, .78);
+      --panel-strong: rgba(27, 31, 29, .92);
+      --line: rgba(255, 255, 255, .105);
+      --line-hot: rgba(110, 218, 194, .34);
+      --text: #f1f3ef;
+      --muted: #919995;
+      --quiet: #626a66;
+      --accent: #6edac2;
+      --accent-soft: rgba(110, 218, 194, .13);
+      --swap: #ff9876;
+      --swap-soft: rgba(255, 152, 118, .16);
+      --done: #94a09b;
+      --danger: #ffad92;
+      --radius: 18px;
+      --ease: cubic-bezier(.16, 1, .3, 1);
+      font-family: "Avenir Next", "Helvetica Neue", "PingFang SC", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 18% 8%, rgba(110,218,194,.085), transparent 27rem),
+        radial-gradient(circle at 94% 74%, rgba(255,152,118,.045), transparent 24rem),
+        var(--bg);
+      overflow-x: hidden;
+    }
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      opacity: .14;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.82' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.25'/%3E%3C/svg%3E");
+      mix-blend-mode: soft-light;
+    }
+    button, input { font: inherit; }
+    button { color: inherit; }
+    .mono { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; }
+
+    .shell { width: min(1380px, calc(100% - 40px)); margin: 0 auto; padding: 26px 0 38px; }
+    header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand-mark { width: 29px; height: 29px; border: 1px solid var(--line-hot); border-radius: 9px; display: grid; place-items: center; background: var(--accent-soft); box-shadow: 0 0 28px rgba(110,218,194,.12); }
+    .brand-mark span { display: block; width: 11px; height: 11px; border: 2px solid var(--accent); border-radius: 50%; }
+    .brand strong { font-size: 14px; letter-spacing: -.01em; }
+    .brand small { color: var(--quiet); font-size: 11px; display: block; margin-top: 1px; }
+    .shortcut { color: var(--muted); font-size: 12px; }
+    kbd { border: 1px solid var(--line); background: rgba(255,255,255,.035); border-radius: 5px; padding: 3px 6px; font: 10px "SFMono-Regular", monospace; color: #cbd0cd; }
+
+    .bento { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(300px, .78fr); gap: 12px; }
+    .card { position: relative; overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius); background: linear-gradient(140deg, rgba(255,255,255,.032), rgba(255,255,255,.012)), var(--panel); box-shadow: 0 20px 50px rgba(0,0,0,.22); backdrop-filter: blur(18px); }
+    .card::after { content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit; background: linear-gradient(120deg, rgba(255,255,255,.045), transparent 28%); }
+    .setup { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(320px, 1fr) auto auto; align-items: end; gap: 18px; padding: 20px; }
+    .field { min-width: 0; }
+    label, .field-label { display: block; color: #bcc3bf; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; margin: 0 0 8px; }
+    .input-wrap { display: flex; gap: 8px; }
+    input { width: 100%; min-width: 0; height: 46px; padding: 0 14px; color: var(--text); background: rgba(3,5,4,.5); border: 1px solid var(--line); border-radius: 11px; outline: none; transition: border-color .2s, box-shadow .2s; }
+    input:focus { border-color: var(--line-hot); box-shadow: 0 0 0 3px var(--accent-soft); }
+    input[aria-invalid="true"] { border-color: var(--danger); }
+    .apply, .seg button, .controls button { border: 1px solid var(--line); background: rgba(255,255,255,.045); border-radius: 10px; cursor: pointer; transition: transform .18s var(--ease), background .18s, border-color .18s, color .18s; }
+    button:hover:not(:disabled) { border-color: rgba(110,218,194,.42); background: rgba(110,218,194,.09); }
+    button:active:not(:disabled) { transform: scale(.97); }
+    button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    button:disabled { opacity: .34; cursor: not-allowed; }
+    .apply { height: 46px; padding: 0 20px; white-space: nowrap; background: var(--accent); color: #06100d; border-color: transparent; font-weight: 700; }
+    .apply:hover:not(:disabled) { background: #82e6d0; }
+    .error { color: var(--danger); font-size: 12px; min-height: 17px; margin: 7px 2px -2px; }
+    .seg { display: grid; grid-template-columns: 1fr 1fr; padding: 3px; background: rgba(3,5,4,.55); border: 1px solid var(--line); border-radius: 12px; }
+    .seg button { min-width: 78px; height: 38px; border-color: transparent; background: transparent; border-radius: 8px; color: var(--muted); }
+    .seg button.active { color: var(--text); background: rgba(255,255,255,.09); box-shadow: inset 0 0 0 1px var(--line); }
+    .speed select { height: 46px; color: var(--text); background: rgba(3,5,4,.55); border: 1px solid var(--line); border-radius: 11px; padding: 0 30px 0 12px; }
+
+    .stage-card { min-height: 528px; padding: 26px 28px 22px; }
+    .stage-head { display: flex; justify-content: space-between; gap: 20px; align-items: flex-start; }
+    .eyebrow { color: var(--accent); font: 11px "SFMono-Regular", monospace; letter-spacing: .12em; text-transform: uppercase; margin-bottom: 8px; }
+    h1 { margin: 0; font-size: clamp(28px, 3.2vw, 47px); line-height: .98; letter-spacing: -.055em; font-weight: 620; max-width: 700px; }
+    .progress-copy { color: var(--muted); font-size: 11px; margin-top: 4px; text-align: right; white-space: nowrap; }
+    .progress-track { width: 130px; height: 3px; background: rgba(255,255,255,.08); margin-top: 9px; overflow: hidden; border-radius: 3px; }
+    .progress-fill { width: 0; height: 100%; background: var(--accent); box-shadow: 0 0 14px rgba(110,218,194,.55); transition: width .35s var(--ease); }
+    .visual-stage { height: 326px; margin-top: 32px; padding: 12px 0 0; position: relative; border-bottom: 1px solid var(--line); }
+    .visual-stage::before { content: ""; position: absolute; inset: 0 0 1px; background: repeating-linear-gradient(to top, transparent 0 79px, rgba(255,255,255,.04) 80px); pointer-events: none; }
+    .bar-item { position: absolute; bottom: 16px; width: var(--item-w); left: calc(var(--pos) * (100% / var(--count))); height: calc(var(--bar-h) * 1%); min-height: 48px; transition: left .54s var(--ease), filter .25s, opacity .25s; padding: 0 4px; z-index: 1; }
+    .bar-body { width: 100%; height: 100%; position: relative; border-radius: 10px 10px 4px 4px; border: 1px solid rgba(255,255,255,.11); background: linear-gradient(180deg, rgba(255,255,255,.11), rgba(255,255,255,.035)); box-shadow: inset 0 1px rgba(255,255,255,.05); transition: background .22s, border-color .22s, box-shadow .22s, transform .22s var(--ease); }
+    .bar-value { position: absolute; left: 50%; transform: translateX(-50%); top: -29px; font: 600 12px "SFMono-Regular", monospace; white-space: nowrap; color: #c9cfcb; transition: color .2s; }
+    .bar-index { position: absolute; left: 50%; transform: translateX(-50%); bottom: -38px; color: var(--quiet); font: 10px "SFMono-Regular", monospace; }
+    .bar-item.compare .bar-body { border-color: var(--accent); background: linear-gradient(180deg, rgba(110,218,194,.28), rgba(110,218,194,.08)); box-shadow: 0 0 26px rgba(110,218,194,.15), inset 0 1px rgba(255,255,255,.12); transform: translateY(-7px); }
+    .bar-item.compare .bar-value { color: var(--accent); }
+    .bar-item.swap .bar-body { border-color: var(--swap); background: linear-gradient(180deg, rgba(255,152,118,.35), rgba(255,152,118,.10)); box-shadow: 0 0 27px rgba(255,152,118,.18); }
+    .bar-item.swap .bar-value { color: var(--swap); }
+    .bar-item.done { opacity: .54; filter: saturate(.25); }
+    .bar-item.done .bar-body { background: linear-gradient(180deg, rgba(148,160,155,.17), rgba(148,160,155,.04)); border-color: rgba(148,160,155,.25); }
+    .bar-item.done .bar-index::after { content: " · 就位"; color: var(--done); }
+
+    .array-strip { display: grid; grid-template-columns: repeat(var(--count), minmax(0,1fr)); gap: 6px; margin-top: 10px; }
+    .chip { min-width: 0; padding: 8px 2px; border: 1px solid var(--line); border-radius: 7px; background: rgba(0,0,0,.18); text-align: center; color: #c6ccc8; font: 11px "SFMono-Regular", monospace; transition: .2s; overflow: hidden; text-overflow: ellipsis; }
+    .chip.compare { color: var(--accent); border-color: var(--line-hot); background: var(--accent-soft); }
+    .chip.swap { color: var(--swap); border-color: rgba(255,152,118,.42); background: var(--swap-soft); }
+    .chip.done { color: var(--quiet); opacity: .65; }
+
+    .side { display: grid; grid-template-rows: auto 1fr auto; gap: 12px; min-width: 0; }
+    .status-card { padding: 22px; min-height: 194px; }
+    .status-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+    .round { font: 12px "SFMono-Regular", monospace; color: var(--muted); }
+    .pill { border: 1px solid var(--line); border-radius: 999px; padding: 5px 9px; color: var(--muted); font: 10px "SFMono-Regular", monospace; }
+    .pill.active { border-color: var(--line-hot); color: var(--accent); background: var(--accent-soft); }
+    .pill.swap { border-color: rgba(255,152,118,.4); color: var(--swap); background: var(--swap-soft); }
+    .status-values { font: 600 clamp(23px,3vw,34px) "SFMono-Regular", monospace; margin: 25px 0 12px; letter-spacing: -.04em; }
+    .status-values .op { color: var(--accent); padding: 0 7px; }
+    .explain { color: #bdc4c0; font-size: 13px; line-height: 1.65; margin: 0; text-wrap: pretty; }
+    .log-card { padding: 21px 22px; }
+    .card-title { margin: 0 0 16px; font-size: 12px; color: #cbd0cd; font-weight: 600; }
+    .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+    .metric { background: rgba(10,12,11,.82); padding: 14px; }
+    .metric span { display:block; color: var(--quiet); font-size: 10px; margin-bottom: 7px; }
+    .metric strong { font: 500 19px "SFMono-Regular", monospace; }
+    .range-row { margin-top: 17px; display: flex; justify-content: space-between; color: var(--muted); font-size: 11px; }
+    .range-dots { display: flex; gap: 4px; margin-top: 9px; }
+    .range-dots i { height: 4px; flex: 1; border-radius: 4px; background: rgba(255,255,255,.08); }
+    .range-dots i.done { background: rgba(148,160,155,.42); }
+    .legend { display: flex; flex-wrap: wrap; gap: 13px; margin-top: 17px; color: var(--muted); font-size: 10px; }
+    .legend i { display:inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 5px; vertical-align: 1px; background: var(--accent); }
+    .legend span:nth-child(2) i { background: var(--swap); }
+    .legend span:nth-child(3) i { background: var(--done); }
+    .controls { padding: 12px; display: grid; grid-template-columns: 46px 1fr 46px 46px; gap: 7px; }
+    .controls button { height: 44px; }
+    .controls .play { color: #07110e; background: var(--accent); border-color: var(--accent); font-weight: 700; }
+    .controls .play:hover:not(:disabled) { background: #82e6d0; }
+    .controls .reset { color: var(--muted); }
+    .footer-note { grid-column: 1 / -1; color: var(--quiet); font: 10px "SFMono-Regular", monospace; text-align: right; padding: 0 4px; }
+
+    @media (max-width: 900px) {
+      .bento { grid-template-columns: 1fr; }
+      .setup, .stage-card, .side, .footer-note { grid-column: 1; }
+      .setup { grid-template-columns: 1fr auto; }
+      .speed { display: none; }
+      .side { grid-template-columns: 1fr 1fr; grid-template-rows: auto auto; }
+      .controls { grid-column: 1 / -1; }
+    }
+    @media (max-width: 600px) {
+      .shell { width: min(100% - 20px, 560px); padding-top: 15px; }
+      .shortcut { display: none; }
+      .setup { grid-template-columns: 1fr; gap: 12px; padding: 15px; }
+      .input-wrap { flex-wrap: wrap; }
+      .apply { width: 100%; }
+      .seg button { width: 100%; }
+      .stage-card { min-height: 430px; padding: 21px 15px 16px; }
+      .stage-head { display: block; }
+      .progress-copy { text-align:left; margin-top: 16px; }
+      .progress-track { width: 100%; }
+      .visual-stage { height: 236px; margin-top: 26px; }
+      .bar-item { padding: 0 2px; min-height: 34px; bottom: 12px; }
+      .bar-body { border-radius: 7px 7px 3px 3px; }
+      .bar-value { font-size: 9px; top: -22px; }
+      .bar-index { display:none; }
+      .array-strip { gap: 3px; }
+      .chip { font-size: 9px; padding: 7px 1px; }
+      .side { grid-template-columns: 1fr; }
+      .status-card { min-height: 170px; }
+      .footer-note { text-align: center; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <!-- Assumption: this is a self-contained teaching prototype; no external fonts, assets, or network calls. -->
+  <main class="shell">
+    <header>
+      <div class="brand"><div class="brand-mark" aria-hidden="true"><span></span></div><div><strong>Bubble Lab</strong><small>逐步排序实验室</small></div></div>
+      <div class="shortcut"><kbd>←</kbd> 上一步　<kbd>→</kbd> 下一步　<kbd>Space</kbd> 播放</div>
+    </header>
+
+    <div class="bento">
+      <section class="card setup" aria-label="排序设置">
+        <div class="field">
+          <label for="sequence">输入序列 · 2–12 个有限数字</label>
+          <div class="input-wrap"><input id="sequence" class="mono" value="8, 3, 6, 2, 7, 1" autocomplete="off" spellcheck="false" aria-describedby="error"><button class="apply" id="apply">生成步骤</button></div>
+          <div class="error" id="error" role="alert"></div>
+        </div>
+        <div><span class="field-label">排序方向</span><div class="seg" role="group" aria-label="排序方向"><button id="asc" class="active" aria-pressed="true">升序 ↑</button><button id="desc" aria-pressed="false">降序 ↓</button></div></div>
+        <div class="speed"><label for="speed">播放速度</label><select id="speed"><option value="1100">慢速</option><option value="720" selected>标准</option><option value="400">快速</option></select></div>
+      </section>
+
+      <section class="card stage-card" aria-label="排序可视化">
+        <div class="stage-head">
+          <div><div class="eyebrow">Live algorithm trace</div><h1>看见数字如何<br>一步步归位。</h1></div>
+          <div class="progress-copy"><span id="stepText">步骤 0 / 0</span><div class="progress-track"><div class="progress-fill" id="progress"></div></div></div>
+        </div>
+        <div class="visual-stage" id="stage" aria-label="柱状数组图"></div>
+        <div class="array-strip" id="arrayStrip" aria-label="当前数组"></div>
+      </section>
+
+      <aside class="side">
+        <section class="card status-card" aria-live="polite" aria-atomic="true">
+          <div class="status-top"><span class="round" id="round">准备开始</span><span class="pill" id="statePill">READY</span></div>
+          <div class="status-values" id="values">—</div>
+          <p class="explain" id="explain">点击「下一步」，从第一对相邻数字开始比较。</p>
+        </section>
+        <section class="card log-card">
+          <h2 class="card-title">运行记录</h2>
+          <div class="detail-grid">
+            <div class="metric"><span>比较次数</span><strong id="comparisons">0</strong></div>
+            <div class="metric"><span>交换次数</span><strong id="swaps">0</strong></div>
+            <div class="metric"><span>当前索引</span><strong id="indices">—</strong></div>
+            <div class="metric"><span>剩余轮次</span><strong id="remaining">—</strong></div>
+          </div>
+          <div class="range-row"><span>已就位区间</span><span id="rangeText">暂无</span></div>
+          <div class="range-dots" id="rangeDots"></div>
+          <div class="legend"><span><i></i>正在比较</span><span><i></i>发生交换</span><span><i></i>已经就位</span></div>
+        </section>
+        <section class="card controls" aria-label="步骤控制">
+          <button id="prev" title="上一步" aria-label="上一步">←</button>
+          <button id="play" class="play">自动播放</button>
+          <button id="next" title="下一步" aria-label="下一步">→</button>
+          <button id="reset" class="reset" title="重置" aria-label="重置">↺</button>
+        </section>
+      </aside>
+      <div class="footer-note">BUBBLE SORT · 每个画面均由算法步骤实时计算</div>
+    </div>
+  </main>
+
+  <script>
+    (() => {
+      const $ = (s) => document.querySelector(s);
+      const els = {
+        input: $('#sequence'), error: $('#error'), apply: $('#apply'), asc: $('#asc'), desc: $('#desc'), speed: $('#speed'),
+        stage: $('#stage'), strip: $('#arrayStrip'), stepText: $('#stepText'), progress: $('#progress'), round: $('#round'),
+        pill: $('#statePill'), values: $('#values'), explain: $('#explain'), comparisons: $('#comparisons'), swaps: $('#swaps'),
+        indices: $('#indices'), remaining: $('#remaining'), rangeText: $('#rangeText'), rangeDots: $('#rangeDots'),
+        prev: $('#prev'), next: $('#next'), play: $('#play'), reset: $('#reset')
+      };
+      let direction = 'asc';
+      let steps = [];
+      let cursor = 0;
+      let timer = null;
+
+      function parseInput() {
+        const raw = els.input.value.trim();
+        if (!raw) throw new Error('请输入至少 2 个数字。');
+        const parts = raw.split(/[\s,，]+/).filter(Boolean);
+        if (parts.length < 2 || parts.length > 12) throw new Error('序列需要包含 2–12 个数字。');
+        const nums = parts.map(Number);
+        if (nums.some(n => !Number.isFinite(n))) throw new Error('仅支持有限数字；请检查序列中的文字或符号。');
+        return nums;
+      }
+
+      function buildSteps(numbers) {
+        let arr = numbers.map((value, id) => ({ value, id }));
+        const out = [{ type: 'start', arr: arr.map(x => ({...x})), pass: 0, pair: [], sorted: [], comparisons: 0, swaps: 0, text: '点击「下一步」，从第一对相邻数字开始比较。' }];
+        let comparisons = 0, swaps = 0;
+        for (let pass = 0; pass < arr.length - 1; pass++) {
+          let changed = false;
+          for (let j = 0; j < arr.length - 1 - pass; j++) {
+            comparisons++;
+            const shouldSwap = direction === 'asc' ? arr[j].value > arr[j+1].value : arr[j].value < arr[j+1].value;
+            out.push({ type: 'compare', arr: arr.map(x => ({...x})), pass: pass + 1, pair: [j,j+1], sorted: tail(arr.length, pass), comparisons, swaps, shouldSwap,
+              text: shouldSwap ? `${fmt(arr[j].value)} ${direction === 'asc' ? '>' : '<'} ${fmt(arr[j+1].value)}，顺序不符，下一步交换它们。` : `${fmt(arr[j].value)} ${direction === 'asc' ? '≤' : '≥'} ${fmt(arr[j+1].value)}，顺序正确，继续向右比较。` });
+            if (shouldSwap) {
+              [arr[j], arr[j+1]] = [arr[j+1], arr[j]];
+              swaps++; changed = true;
+              out.push({ type: 'swap', arr: arr.map(x => ({...x})), pass: pass + 1, pair: [j,j+1], sorted: tail(arr.length, pass), comparisons, swaps,
+                text: `已交换索引 ${j} 与 ${j+1}，较${direction === 'asc' ? '大' : '小'}的值向末端冒泡。` });
+            }
+          }
+          const sorted = tail(arr.length, pass + 1);
+          out.push({ type: 'pass', arr: arr.map(x => ({...x})), pass: pass + 1, pair: [], sorted, comparisons, swaps,
+            text: `第 ${pass + 1} 轮结束，索引 ${arr.length - 1 - pass} 的值已确定位置。` });
+          if (!changed) break;
+        }
+        out.push({ type: 'complete', arr: arr.map(x => ({...x})), pass: Math.max(1, Math.min(arr.length - 1, out[out.length-1].pass)), pair: [], sorted: arr.map((_,i)=>i), comparisons, swaps,
+          text: `排序完成：共比较 ${comparisons} 次，交换 ${swaps} 次。` });
+        return out;
+      }
+      function tail(n, count) { return Array.from({length: count}, (_,i) => n - 1 - i); }
+      function fmt(n) { return Number.isInteger(n) ? String(n) : String(Number(n.toFixed(4))); }
+      function stop() { if (timer) clearInterval(timer); timer = null; els.play.textContent = '自动播放'; }
+      function setDirection(dir) {
+        direction = dir; stop();
+        els.asc.classList.toggle('active', dir === 'asc'); els.desc.classList.toggle('active', dir === 'desc');
+        els.asc.setAttribute('aria-pressed', dir === 'asc'); els.desc.setAttribute('aria-pressed', dir === 'desc');
+        generate();
+      }
+      function generate() {
+        stop();
+        try {
+          const nums = parseInput();
+          els.error.textContent = ''; els.input.setAttribute('aria-invalid','false');
+          steps = buildSteps(nums); cursor = 0; render(true);
+        } catch (err) {
+          els.error.textContent = err.message; els.input.setAttribute('aria-invalid','true');
+        }
+      }
+
+      function render(rebuild = false) {
+        const s = steps[cursor]; if (!s) return;
+        const values = s.arr.map(x => x.value);
+        const min = Math.min(...values), max = Math.max(...values), spread = max - min || 1;
+        els.stage.style.setProperty('--count', s.arr.length); els.stage.style.setProperty('--item-w', `${100/s.arr.length}%`);
+        if (rebuild || els.stage.children.length !== s.arr.length) {
+          els.stage.innerHTML = '';
+          s.arr.forEach(item => {
+            const node = document.createElement('div'); node.className='bar-item'; node.dataset.id=item.id;
+            node.innerHTML='<div class="bar-body"><span class="bar-value"></span><span class="bar-index"></span></div>';
+            els.stage.appendChild(node);
+          });
+        }
+        s.arr.forEach((item, pos) => {
+          const node = els.stage.querySelector(`[data-id="${item.id}"]`);
+          node.style.setProperty('--pos', pos); node.style.setProperty('--bar-h', 22 + ((item.value-min)/spread)*70);
+          node.className = 'bar-item' + (s.pair.includes(pos) ? ' compare' : '') + (s.type==='swap' && s.pair.includes(pos) ? ' swap' : '') + (s.sorted.includes(pos) ? ' done' : '');
+          node.querySelector('.bar-value').textContent = fmt(item.value); node.querySelector('.bar-index').textContent = `[${pos}]`;
+        });
+        els.strip.style.setProperty('--count', s.arr.length);
+        els.strip.innerHTML = s.arr.map((item,i)=>`<div class="chip${s.pair.includes(i)?' compare':''}${s.type==='swap'&&s.pair.includes(i)?' swap':''}${s.sorted.includes(i)?' done':''}">${fmt(item.value)}</div>`).join('');
+        const total = Math.max(1, steps.length - 1), pct = cursor / total * 100;
+        els.stepText.textContent = `步骤 ${cursor} / ${total}`; els.progress.style.width = `${pct}%`;
+        els.round.textContent = s.type === 'start' ? '准备开始' : s.type === 'complete' ? '全部完成' : `第 ${s.pass} 轮`;
+        const labels = {start:'READY',compare:'COMPARE',swap:'SWAP',pass:'ROUND DONE',complete:'COMPLETE'};
+        els.pill.textContent = labels[s.type]; els.pill.className = 'pill' + (s.type==='compare'||s.type==='complete'?' active':'') + (s.type==='swap'?' swap':'');
+        els.values.innerHTML = s.pair.length ? `${fmt(s.arr[s.pair[0]].value)}<span class="op">${direction==='asc'?'↔':'↔'}</span>${fmt(s.arr[s.pair[1]].value)}` : (s.type==='complete' ? '✓ ' + s.arr.map(x=>fmt(x.value)).join(' · ') : '—');
+        els.explain.textContent = s.text; els.comparisons.textContent=s.comparisons; els.swaps.textContent=s.swaps;
+        els.indices.textContent=s.pair.length?s.pair.join(' / '):'—'; els.remaining.textContent=Math.max(0,s.arr.length-1-s.pass);
+        els.rangeText.textContent=s.sorted.length?`索引 ${Math.min(...s.sorted)}–${s.arr.length-1}`:'暂无';
+        els.rangeDots.innerHTML=s.arr.map((_,i)=>`<i class="${s.sorted.includes(i)?'done':''}"></i>`).join('');
+        els.prev.disabled=cursor===0; els.next.disabled=cursor===steps.length-1; els.play.disabled=cursor===steps.length-1;
+        els.input.disabled=Boolean(timer); els.apply.disabled=Boolean(timer); els.asc.disabled=Boolean(timer); els.desc.disabled=Boolean(timer);
+      }
+      function move(delta) { stop(); cursor=Math.max(0,Math.min(steps.length-1,cursor+delta)); render(); }
+      function togglePlay() {
+        if (timer) { stop(); render(); return; }
+        if (cursor >= steps.length-1) cursor=0;
+        els.play.textContent='暂停'; timer=setInterval(()=>{ if(cursor>=steps.length-1){stop();render();return;} cursor++;render(); }, Number(els.speed.value));
+        render();
+      }
+      els.apply.addEventListener('click', generate);
+      els.input.addEventListener('keydown', e => { if(e.key==='Enter') generate(); });
+      els.asc.addEventListener('click',()=>setDirection('asc')); els.desc.addEventListener('click',()=>setDirection('desc'));
+      els.prev.addEventListener('click',()=>move(-1)); els.next.addEventListener('click',()=>move(1)); els.play.addEventListener('click',togglePlay);
+      els.reset.addEventListener('click',()=>{stop();cursor=0;render();});
+      els.speed.addEventListener('change',()=>{ if(timer){stop();togglePlay();} });
+      document.addEventListener('keydown', e => {
+        if (e.target.matches('input,select,button')) return;
+        if(e.key==='ArrowLeft'){e.preventDefault();move(-1);} if(e.key==='ArrowRight'){e.preventDefault();move(1);} if(e.code==='Space'){e.preventDefault();togglePlay();}
+      });
+      generate();
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>冒泡排序 · 逐步演示</title>
+  <style>
+    :root{--paper:#f3efe5;--ink:#22211e;--muted:#77736b;--rule:#c8c1b3;--accent:#9e3f2c;--swap:#b66a24;--done:#92988b;--white:#fffdf7;--ease:cubic-bezier(.2,.85,.25,1)}
+    *{box-sizing:border-box}
+    html{background:var(--paper);color:var(--ink);font-family:"Songti SC","Noto Serif CJK SC","STSong",Georgia,serif}
+    body{margin:0;min-height:100vh;background:linear-gradient(rgba(80,65,45,.025) 1px,transparent 1px);background-size:100% 28px}
+    button,input{font:inherit;color:inherit}
+    button{border:0;background:none}
+    .page{width:min(1180px,calc(100% - 48px));margin:0 auto;padding:42px 0 34px}
+    header{display:grid;grid-template-columns:1fr auto;gap:24px;align-items:end;border-bottom:1px solid var(--ink);padding-bottom:17px}
+    .kicker,.mono,.index,.stat,.direction,.progress-label{font-family:"SFMono-Regular",Consolas,"Liberation Mono",monospace}
+    .kicker{margin:0 0 8px;color:var(--accent);font-size:11px;letter-spacing:.16em;text-transform:uppercase}
+    h1{font-weight:500;font-size:clamp(30px,4.6vw,58px);line-height:.96;letter-spacing:-.045em;margin:0}
+    .deck{max-width:330px;margin:0;color:#57534c;font-size:13px;line-height:1.65;text-align:right}
+    .setup{display:grid;grid-template-columns:minmax(280px,1fr) auto;gap:38px;padding:22px 0 15px;border-bottom:1px solid var(--rule);align-items:end}
+    .field label,.direction legend{display:block;margin-bottom:8px;font-size:12px;font-style:italic;color:var(--muted)}
+    .input-row{display:flex;gap:12px}
+    input[type=text]{width:100%;border:0;border-bottom:1px solid #7d776c;padding:7px 2px 8px;background:transparent;font-family:"SFMono-Regular",Consolas,monospace;font-size:17px;outline:none}
+    input[type=text]:focus{border-bottom:2px solid var(--accent);padding-bottom:7px}
+    .apply{padding:7px 0 6px;border-bottom:1px solid var(--ink);white-space:nowrap;font-size:13px;cursor:pointer}
+    .apply:hover{color:var(--accent);border-color:var(--accent)}
+    .error{min-height:18px;margin:6px 0 0;color:var(--accent);font-size:12px}
+    .direction{border:0;padding:0;margin:0;display:flex;gap:4px;align-items:end}
+    .direction legend{font-family:Georgia,"Songti SC",serif}
+    .direction label{cursor:pointer;font-size:12px;padding:8px 13px;border:1px solid transparent}
+    .direction input{position:absolute;opacity:0;pointer-events:none}
+    .direction label:has(input:checked){border-color:var(--ink);background:rgba(255,255,255,.3)}
+    .direction label:focus-within{outline:2px solid var(--accent);outline-offset:2px}
+    .stage-head{display:grid;grid-template-columns:1fr auto;align-items:baseline;margin-top:24px}
+    .stage-head h2{font-size:14px;font-weight:500;margin:0}
+    .progress-label{font-size:11px;color:var(--muted)}
+    .stage{position:relative;height:350px;margin-top:12px;border-top:1px solid var(--rule);border-bottom:1px solid var(--ink);background:repeating-linear-gradient(to top,transparent 0,transparent 69px,rgba(84,76,64,.1) 70px);overflow:hidden}
+    .plot{position:absolute;inset:16px 0 0 42px}
+    .baseline{position:absolute;left:-42px;right:0;bottom:44px;border-top:1px solid #958f84}
+    .axis-note{position:absolute;left:-42px;bottom:49px;font:10px "SFMono-Regular",Consolas,monospace;color:var(--muted)}
+    .datum{position:absolute;bottom:44px;width:var(--w);left:var(--x);height:calc(var(--h) * 1px);transition:left .58s var(--ease),height .35s var(--ease),color .25s;background:var(--ink);transform-origin:bottom;box-shadow:inset 0 0 0 1px rgba(255,255,255,.12)}
+    .datum::after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(135deg,transparent 0 5px,rgba(255,255,255,.18) 5px 6px);opacity:0}
+    .datum.comparing{background:var(--accent)}
+    .datum.swapping{background:var(--swap);transform:translateY(-7px)}
+    .datum.done{background:var(--done)}
+    .datum.done::after{opacity:1}
+    .datum-value{position:absolute;left:50%;top:-27px;transform:translateX(-50%);font:600 12px "SFMono-Regular",Consolas,monospace;white-space:nowrap;color:inherit}
+    .datum-index{position:absolute;left:50%;bottom:-25px;transform:translateX(-50%);font:10px "SFMono-Regular",Consolas,monospace;color:var(--muted)}
+    .callout{position:absolute;z-index:3;top:8px;left:var(--callx);transform:translateX(-50%);padding:3px 6px;background:var(--paper);font-size:11px;color:var(--accent);white-space:nowrap;transition:left .5s var(--ease),opacity .2s}
+    .callout::after{content:"";position:absolute;top:100%;left:50%;height:25px;border-left:1px solid currentColor}
+    .notes{display:grid;grid-template-columns:1.1fr .9fr;gap:50px;padding:24px 0 18px;border-bottom:1px solid var(--rule)}
+    .explain{font-size:clamp(18px,2.1vw,28px);line-height:1.36;letter-spacing:-.02em;margin:0;max-width:700px;text-wrap:pretty}
+    .detail{margin:12px 0 0;color:var(--muted);font-size:12px;line-height:1.7}
+    .facts{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin:0;align-self:start}
+    .facts div{border-top:1px solid var(--ink);padding-top:7px}
+    .facts dt{font-size:11px;color:var(--muted);font-style:italic}
+    .facts dd{margin:5px 0 0;font:18px "SFMono-Regular",Consolas,monospace}
+    .progress{height:3px;background:#d7d0c4;margin-top:-2px;position:relative}
+    .progress span{display:block;height:100%;width:0;background:var(--accent);transition:width .3s ease}
+    .controls{display:grid;grid-template-columns:auto auto 1fr auto;gap:8px;align-items:center;padding-top:18px}
+    .control{cursor:pointer;border:1px solid var(--ink);min-height:42px;padding:9px 16px;background:rgba(255,255,255,.25);font-size:13px}
+    .control.primary{background:var(--ink);color:var(--paper);min-width:118px}
+    .control:hover:not(:disabled){border-color:var(--accent);color:var(--accent)}
+    .control.primary:hover:not(:disabled){background:var(--accent);color:white}
+    .control:disabled{opacity:.3;cursor:not-allowed}
+    .keyhint{margin:0 0 0 10px;color:var(--muted);font-size:11px;font-style:italic}
+    .legend{display:flex;justify-content:flex-end;gap:19px;font:10px "SFMono-Regular",Consolas,monospace;color:var(--muted)}
+    .legend span::before{content:"";display:inline-block;width:8px;height:8px;margin-right:6px;background:var(--ink)}
+    .legend .l-compare::before{background:var(--accent)}.legend .l-swap::before{background:var(--swap)}.legend .l-done::before{background:var(--done)}
+    .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+    @media(max-width:760px){.page{width:min(100% - 28px,680px);padding-top:24px}header{grid-template-columns:1fr}.deck{text-align:left;max-width:560px}.setup{grid-template-columns:1fr;gap:11px}.direction{justify-self:start}.stage{height:300px}.plot{left:25px}.axis-note{left:-25px}.baseline{left:-25px}.notes{grid-template-columns:1fr;gap:24px}.controls{grid-template-columns:1fr 1fr}.control.primary{grid-column:span 1}.keyhint{display:none}.legend{grid-column:1/-1;justify-content:flex-start;flex-wrap:wrap;margin-top:8px}}
+    @media(max-width:430px){.page{width:calc(100% - 22px);padding-top:18px}h1{font-size:34px}.deck{font-size:12px}.input-row{gap:8px}.setup{padding-top:17px}.stage{height:250px}.plot{inset:12px 0 0 20px}.datum-value{font-size:10px;top:-22px}.callout{font-size:9px}.notes{padding-top:17px}.explain{font-size:19px}.facts{gap:9px}.facts dd{font-size:15px}.control{padding:8px 10px}.legend{gap:10px}}
+    @media(prefers-reduced-motion:reduce){*,*::before,*::after{scroll-behavior:auto!important;transition-duration:.01ms!important;animation-duration:.01ms!important}}
+  </style>
+</head>
+<body>
+  <!-- Assumption: this is a self-contained teaching instrument; no decorative imagery is needed. -->
+  <!-- Design reasoning: editorial hierarchy and direct annotations minimize distance between data and explanation. -->
+  <main class="page">
+    <header>
+      <div><p class="kicker">Algorithm study · 01</p><h1>冒泡排序，逐次看清。</h1></div>
+      <p class="deck">每一步只做一次相邻比较。砖红表示正在比较，赭色表示发生交换；灰色斜纹是已经就位的区间。</p>
+    </header>
+
+    <section class="setup" aria-label="序列设置">
+      <div class="field">
+        <label for="numbers">输入 2–12 个数字，以空格或逗号分隔</label>
+        <div class="input-row"><input id="numbers" type="text" value="7, 3, 9, 2, 6, 1" autocomplete="off" spellcheck="false"><button class="apply" id="apply">应用序列</button></div>
+        <p class="error" id="error" role="alert"></p>
+      </div>
+      <fieldset class="direction" id="direction"><legend>排序方向</legend><label><input type="radio" name="order" value="asc" checked>升序 ↑</label><label><input type="radio" name="order" value="desc">降序 ↓</label></fieldset>
+    </section>
+
+    <section aria-labelledby="chartTitle">
+      <div class="stage-head"><h2 id="chartTitle">数组状态</h2><span class="progress-label" id="progressLabel">步骤 0 / 0</span></div>
+      <div class="stage"><div class="plot" id="plot"><div class="baseline"></div><span class="axis-note">值</span><div class="callout" id="callout" hidden>比较</div></div></div>
+      <div class="progress" aria-hidden="true"><span id="progressBar"></span></div>
+    </section>
+
+    <section class="notes" aria-label="当前步骤说明">
+      <div><p class="explain" id="explain">准备好后，从左侧开始比较相邻元素。</p><p class="detail mono" id="detail">等待第一步</p></div>
+      <dl class="facts"><div><dt>轮次</dt><dd id="round">—</dd></div><div><dt>比较</dt><dd id="comparisons">0</dd></div><div><dt>交换</dt><dd id="swaps">0</dd></div></dl>
+    </section>
+
+    <nav class="controls" aria-label="动画控制">
+      <button class="control" id="prev" disabled>← 上一步</button><button class="control primary" id="next">下一步 →</button><p class="keyhint">也可使用键盘 ← →</p><div class="legend"><span class="l-compare">比较中</span><span class="l-swap">已交换</span><span class="l-done">已就位</span></div>
+      <button class="control" id="play">自动播放</button><button class="control" id="reset">重置</button>
+    </nav>
+    <p class="sr-only" id="live" aria-live="polite"></p>
+  </main>
+
+  <script>
+    (() => {
+      'use strict';
+      const $ = s => document.querySelector(s);
+      const els = {input:$('#numbers'),apply:$('#apply'),error:$('#error'),direction:$('#direction'),plot:$('#plot'),callout:$('#callout'),explain:$('#explain'),detail:$('#detail'),round:$('#round'),comparisons:$('#comparisons'),swaps:$('#swaps'),prev:$('#prev'),next:$('#next'),play:$('#play'),reset:$('#reset'),progress:$('#progressBar'),progressLabel:$('#progressLabel'),live:$('#live')};
+      let source=[], steps=[], cursor=0, timer=null, order='asc';
+
+      function parseInput(text){
+        const parts=text.trim().split(/[\s,，]+/).filter(Boolean);
+        if(parts.length<2||parts.length>12) throw new Error('请输入 2–12 个数字。');
+        const nums=parts.map(Number);
+        if(nums.some(n=>!Number.isFinite(n))) throw new Error('序列中含有无法识别的数字。');
+        return nums;
+      }
+
+      function makeSteps(values){
+        const a=values.map((value,id)=>({value,id}));
+        const out=[{items:a.map(x=>({...x})),round:0,pair:null,before:null,swapped:false,comparisons:0,swaps:0,done:[],complete:false}];
+        let comparisons=0,swaps=0;
+        for(let r=0;r<a.length-1;r++){
+          let changed=false;
+          for(let j=0;j<a.length-1-r;j++){
+            const before=[a[j].value,a[j+1].value]; comparisons++;
+            const should=order==='asc'?a[j].value>a[j+1].value:a[j].value<a[j+1].value;
+            if(should){[a[j],a[j+1]]=[a[j+1],a[j]];swaps++;changed=true}
+            const done=[]; for(let k=a.length-r;k<a.length;k++) done.push(k);
+            if(j===a.length-2-r) done.push(a.length-1-r);
+            out.push({items:a.map(x=>({...x})),round:r+1,pair:[j,j+1],before,swapped:should,comparisons,swaps,done,complete:false});
+          }
+          if(!changed){out[out.length-1].complete=true;out[out.length-1].done=a.map((_,i)=>i);break}
+        }
+        if(out.length===1||!out[out.length-1].complete){out.push({items:a.map(x=>({...x})),round:Math.min(a.length-1,out[out.length-1].round),pair:null,before:null,swapped:false,comparisons,swaps,done:a.map((_,i)=>i),complete:true})}
+        return out;
+      }
+
+      function stop(){if(timer){clearInterval(timer);timer=null}els.play.textContent='自动播放';els.play.setAttribute('aria-pressed','false')}
+      function setup(nums=source){stop();source=nums.slice();steps=makeSteps(source);cursor=0;render(true)}
+
+      function render(rebuild=false){
+        const s=steps[cursor], n=s.items.length, values=s.items.map(x=>x.value), min=Math.min(...values),max=Math.max(...values), range=max-min||1;
+        const existing=new Map([...els.plot.querySelectorAll('.datum')].map(node=>[Number(node.dataset.id),node]));
+        s.items.forEach((item,i)=>{
+          let node=existing.get(item.id);
+          if(!node){node=document.createElement('div');node.className='datum';node.dataset.id=item.id;node.innerHTML='<span class="datum-value"></span><span class="datum-index"></span>';els.plot.appendChild(node)}
+          const maxRise=Math.max(86,document.querySelector('.stage').clientHeight-118),height=42+((item.value-min)/range)*maxRise;
+          node.style.setProperty('--x',`${i*100/n}%`);node.style.setProperty('--h',height);node.style.setProperty('--w',`calc(${100/n}% - ${n>8?5:10}px)`);
+          node.querySelector('.datum-value').textContent=item.value;node.querySelector('.datum-index').textContent=`[${i}]`;
+          node.className='datum';
+          if(s.done.includes(i)) node.classList.add('done');
+          if(s.pair&&s.pair.includes(i)) node.classList.add(s.swapped?'swapping':'comparing');
+        });
+        existing.forEach((node,id)=>{if(!s.items.some(x=>x.id===id))node.remove()});
+        if(s.pair){els.callout.hidden=false;els.callout.style.setProperty('--callx',`${(s.pair[0]+1)*100/n}%`);els.callout.textContent=s.swapped?'交换':'比较'}else els.callout.hidden=true;
+        if(s.complete){els.explain.textContent=`排序完成：${values.join('，')}。`;els.detail.textContent=`所有 ${n} 个元素均已就位`}
+        else if(!s.pair){els.explain.textContent='准备好后，从左侧开始比较相邻元素。';els.detail.textContent='等待第一步'}
+        else {const symbol=order==='asc'?'≤':'≥';els.explain.textContent=s.swapped?`${s.before[0]} 与 ${s.before[1]} 顺序不符，交换它们。`:`${s.before[0]} 与 ${s.before[1]} 已满足 ${symbol}，保持位置。`;els.detail.textContent=`第 ${s.round} 轮 · 比较索引 [${s.pair[0]}] 与 [${s.pair[1]}]`}
+        els.round.textContent=s.round?`${s.round}/${n-1}`:'—';els.comparisons.textContent=s.comparisons;els.swaps.textContent=s.swaps;
+        const pct=(cursor/(steps.length-1))*100;els.progress.style.width=`${pct}%`;els.progressLabel.textContent=`步骤 ${cursor} / ${steps.length-1}`;
+        els.prev.disabled=cursor===0;els.next.disabled=cursor===steps.length-1;els.next.textContent=s.complete?'已完成':'下一步 →';
+        els.live.textContent=els.explain.textContent;
+        if(cursor===steps.length-1) stop();
+      }
+
+      function move(delta){stop();cursor=Math.max(0,Math.min(steps.length-1,cursor+delta));render()}
+      function apply(){try{const nums=parseInput(els.input.value);els.error.textContent='';setup(nums)}catch(err){stop();els.error.textContent=err.message;els.input.focus()}}
+      els.apply.addEventListener('click',apply);els.input.addEventListener('keydown',e=>{if(e.key==='Enter')apply()});
+      els.direction.addEventListener('change',e=>{if(e.target.name==='order'){order=e.target.value;els.error.textContent='';setup(source)}});
+      els.prev.addEventListener('click',()=>move(-1));els.next.addEventListener('click',()=>move(1));
+      els.reset.addEventListener('click',()=>{stop();cursor=0;render()});
+      els.play.addEventListener('click',()=>{if(timer){stop();return}if(cursor===steps.length-1)cursor=0;els.play.textContent='暂停';els.play.setAttribute('aria-pressed','true');render();timer=setInterval(()=>{if(cursor<steps.length-1){cursor++;render()}else stop()},850)});
+      document.addEventListener('keydown',e=>{if(e.target.matches('input'))return;if(e.key==='ArrowLeft'){e.preventDefault();move(-1)}if(e.key==='ArrowRight'){e.preventDefault();move(1)}});
+      window.addEventListener('resize',()=>render());
+      try{source=parseInput(els.input.value);setup(source)}catch(_){}
+    })();
+  </script>
+</body>
+</html>
