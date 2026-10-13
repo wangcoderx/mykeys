@@ -190,17 +190,29 @@ flowchart LR
 
 ## 构建与运行
 
-需要 Rust 工具链与 Node.js。
+只需要 Rust 工具链和 Tauri CLI，没有前端构建步骤——`tauri.conf.json` 的 `frontendDist` 直接指向 `MyKeys-2.0`，前端就是一个 HTML 文件。
 
 ```sh
-# 开发
-cargo tauri dev
-
-# 打包 macOS 应用
-cargo tauri build --bundles app
+cargo install tauri-cli --locked --version '^2'   # 只需一次
 ```
 
-本项目零前端构建步骤：`tauri.conf.json` 的 `frontendDist` 直接指向 `MyKeys-2.0`，前端就是一个 HTML 文件。
+### 一键脚本（macOS）
+
+```sh
+./scripts/install-test-macos.sh              # 构建 → 安装到 /Applications → 启动
+./scripts/install-test-macos.sh --no-install # 构建后直接运行 target 里的 .app
+./scripts/install-test-macos.sh --build-only # 只构建
+./scripts/install-test-macos.sh --dmg        # 额外产出 .dmg
+```
+
+脚本会先结束正在运行的实例，构建 Release（含 CSP 哈希断言），校验产物存在，解除隔离属性并做 ad-hoc 签名，最后启动并确认进程存活。保险库数据位于 `~/Library/Application Support/MyKeys`，替换应用不影响它。
+
+### 手动命令
+
+```sh
+cargo tauri dev                    # 开发
+cargo tauri build --bundles app    # 只打包 .app
+```
 
 > **改前端前必读。** 内联脚本受 CSP 哈希约束，`build.rs` 会在编译期断言 `tauri.conf.json` 中的 `sha256-...` 与脚本正文一致，哈希过期会直接构建失败。取的是第一个 `<script>` 与第一个 `</script>` 之间的正文：
 >
@@ -254,6 +266,8 @@ MyKeys/
 │   ├── MyKeys-设计方案-v1.md    第一版设计草案
 │   ├── icons/                  各平台应用图标
 │   └── providers/              厂商 Logo 源文件
+├── scripts/
+│   └── install-test-macos.sh   macOS 一键打包与安装
 ├── build.rs                    编译期校验 CSP 脚本哈希
 ├── tauri.conf.json             窗口、CSP、打包配置
 ├── SECURITY.md                 漏洞报告方式
