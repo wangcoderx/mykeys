@@ -8,7 +8,7 @@ edition = "2021"
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 base64 = "0.22"
-sha2 = "0.10"
+sha2 = "0.11"
 
 [dependencies]
 tauri = { version = "2", features = [] }
@@ -22,7 +22,7 @@ zeroize = { version = "1", features = ["derive"] }
 keyring = { version = "3", features = ["apple-native"] }
 dirs = "6"
 fs2 = "0.4"
-sha2 = "0.10"
+sha2 = "0.11"
 
 [profile.release]
 panic = "abort"
