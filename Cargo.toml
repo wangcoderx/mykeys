@@ -22,6 +22,7 @@ zeroize = { version = "1", features = ["derive"] }
 keyring = { version = "3", features = ["apple-native"] }
 dirs = "6"
 fs2 = "0.4"
+sha2 = "0.10"
 
 [profile.release]
 panic = "abort"

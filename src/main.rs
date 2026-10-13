@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod security_state;
 mod vault;
 
 use std::{
@@ -259,6 +260,7 @@ fn initialize(
         }
         return Err(error);
     }
+    let _ = security_state::clear();
     set_session(&state, dek)
 }
 
@@ -267,8 +269,21 @@ fn unlock(password: String, state: State<'_, RuntimeState>) -> Result<(), String
     let password = Zeroizing::new(password);
     let _operation = state.vault_op.lock().map_err(|_| "保险库事务锁异常")?;
     let _file_lock = vault::acquire_file_lock()?;
+    let waiting = security_state::blocked_for();
+    if waiting > 0 {
+        return Err(format!("连续验证失败，请等待 {waiting} 秒后重试"));
+    }
     let mut file = vault::read_file()?;
-    let dek = vault::unwrap_dek(&file, &password)?;
+    let dek = match vault::unwrap_dek(&file, &password) {
+        Ok(dek) => dek,
+        Err(error) => {
+            let delay = security_state::register_failure()?;
+            if delay > 0 {
+                return Err(format!("{error}，请等待 {delay} 秒后重试"));
+            }
+            return Err(error);
+        }
+    };
     let data = vault::read_data(&file, &dek)?;
     if file.version == vault::LEGACY_VERSION {
         vault::migrate_v1(&mut file, &dek, &password, &data)?;
@@ -276,6 +291,7 @@ fn unlock(password: String, state: State<'_, RuntimeState>) -> Result<(), String
             save_credential(&make_credential(&file, &dek, data.unlock_mode)?)?;
         }
     }
+    let _ = security_state::clear();
     set_session(&state, dek)
 }
 
@@ -509,6 +525,7 @@ fn destroy_vault(confirmation: String, state: State<'_, RuntimeState>) -> Result
     if path.exists() {
         std::fs::remove_file(path).map_err(|error| format!("删除保险库失败：{error}"))?;
     }
+    let _ = security_state::clear();
     Ok(())
 }
 
